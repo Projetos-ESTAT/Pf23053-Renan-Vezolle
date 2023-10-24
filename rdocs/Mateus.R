@@ -22,3 +22,9 @@ source("rdocs/source/packages.R")
 # de teste depreciados, ou ao menos deixando como comentário. Dê preferência
 # as funções dos pacotes contidos no Tidyverse para realizar suas análises.
 # ---------------------------------------------------------------------------- #
+
+# carregando alguns pacotes
+pacman::p_load(ggcorrplot, knitr,showtext, kableExtra, data.table, tidyr,SnowballC,
+               wordcloud,tm,stringr)
+
+df <- read_xlsx("banco/Tabela geral de resultados - corrigida(banco incompleto).xlsx", sheet = 1, range = "A1:V69")
