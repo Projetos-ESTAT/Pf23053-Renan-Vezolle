@@ -208,7 +208,20 @@ fe <- df %>%
     label = str_c(n, " (", freq, ")") %>% str_squish()
   )
 
+df$IDADE <- as.numeric(df$IDADE)
 
+tabela_idade <- df %>% filter(!is.na(IDADE)) %>%
+  select(IDADE) %>%
+  summarize('Média' = round(mean(IDADE), 4),
+            'Desvio Padrão' = round(sd(IDADE), 2),
+            'Mínimo' = round(quantile(IDADE, 0), 2),
+            'q25' = round(quantile(IDADE, .25), 2),
+            'Mediana' = round(quantile(IDADE, .5), 4),
+            'q75' = round(quantile(IDADE, .75), 2),
+            'Máximo' = round(quantile(IDADE, 1), 4)
+  ) %>% as.data.frame()
+
+print(xtable(tabela_idade, type = "latex"), include.rownames=F)
 
 fe_plot <- ggplot(fe) +
   aes(
@@ -250,6 +263,19 @@ re <- renda %>%
     label = str_c(n, " (", freq, ")") %>% str_squish()
   )
 
+tabela_renda <- df %>% filter(!is.na(REN.FAM)) %>%
+  select(REN.FAM) %>%
+  summarize('Média' = round(mean(REN.FAM), 4),
+            'Desvio Padrão' = round(sd(REN.FAM), 2),
+            'Mínimo' = round(quantile(REN.FAM, 0), 2),
+            'q25' = round(quantile(REN.FAM, .25), 2),
+            'Mediana' = round(quantile(REN.FAM, .5), 4),
+            'q75' = round(quantile(REN.FAM, .75), 2),
+            'Máximo' = round(quantile(REN.FAM, 1), 4)
+  ) %>% as.data.frame()
+
+print(xtable(tabela_renda, type = "latex"), include.rownames=F)
+
 re_plot <- ggplot(re) +
   aes(
     x = fct_reorder(Faixa_Renda, n, .desc = T),
@@ -280,8 +306,36 @@ ggsave("resultados/tilda/graph_analise1_1.pdf", grid2,width = 158, height = 93, 
 df1 <- df[,c(8:17)]
 
 df1 <- df1 %>% mutate_all(as.factor)
+tables <- list()
+
+for (var in colnames(df1[c(1:10)])) {
+  
+  temp_table = df1 %>%
+    filter(!is.na(!!sym(var))) %>%
+    count(!!sym(var)) %>%
+    mutate(
+      freq_relativa = n %>% percent(),
+    ) %>%
+    mutate(
+      freq_relativa = gsub('\\.', ',', freq_relativa) %>% paste('%', sep = ''),
+      label = str_c(n, ' (', freq_relativa, ')') %>% str_squish()
+    )
+  tables[[var]] <- temp_table
+}
 
 temp <- pivot_longer(df1, cols = 1:10, names_to = "Prevalências", values_to = "Resultados") %>% filter(!is.na(Resultados))
+
+temp22 <- temp %>% group_by(Prevalências) %>%
+  count(Resultados) %>%
+  mutate(
+    freq_relativa = n %>% percent(),
+  ) %>%
+  mutate(
+    freq_relativa = gsub('\\.', ',', freq_relativa) %>% paste('%', sep = ''),
+    label = str_c(n, ' (', freq_relativa, ')') %>% str_squish()
+  )
+
+print(xtable(temp22, type = "latex"), include.rownames=F)
 
 ggplot(temp, aes(x = Prevalências, fill = Resultados))+
   geom_bar(stat = "count", position = "fill") +
@@ -294,5 +348,74 @@ ggplot(temp, aes(x = Prevalências, fill = Resultados))+
 ggsave("resultados/tilda/graph_analise2.pdf",width = 158, height = 93, units = "mm")
   
 #### Relação entre AGC-10 e o Tempo ----
+#manipulação do banco
 temp3 <- df %>% select(`Índ AGC`,Tempo) %>% filter(!is.na(Tempo))
-  
+#transformando o tempo em min
+temp3$TEMPO_FINAL <- format(strptime(temp3$Tempo,"%Y-%m-%d %M:%S"),"%M:%S") 
+
+temp3$TEMPO_FINAL <- round(sapply(strsplit(temp3$TEMPO_FINAL,":"), function(n) as.numeric(n) %*% c(1,1/60)),2) 
+
+#teste de normalidade -----
+
+#box-plot tempo
+
+ggplot(temp3) +
+  aes(
+    x = factor(""),
+    y = TEMPO_FINAL
+  ) +
+  geom_boxplot(fill = c("#A11D21"), width = 0.5) +
+  guides(fill = FALSE) +
+  stat_summary(
+    fun = "mean", geom = "point", shape = 23, size = 3, fill = "white"
+  ) +
+  labs(x = "", y = "Tempo") +
+  theme_estat()
+ggsave("resultados/tilda/box_Tempo_analise3.pdf", width = 158, height = 93, units = "mm")
+
+#teste de normalidade 
+
+shapiro.test(temp3$TEMPO_FINAL) #p-valor < 0.0001
+
+#box-plot AGC 
+ggplot(temp3) +
+  aes(
+    x = factor(""),
+    y = `Índ AGC`
+  ) +
+  geom_boxplot(fill = c("#A11D21"), width = 0.5) +
+  guides(fill = FALSE) +
+  stat_summary(
+    fun = "mean", geom = "point", shape = 23, size = 3, fill = "white"
+  ) +
+  labs(x = "", y = "Índ. AGC") +
+  theme_estat()
+ggsave("resultados/tilda/box_AGC_analise3.pdf", width = 158, height = 93, units = "mm")
+
+#teste de normalidade 
+shapiro.test(temp3$`Índ AGC`) #p-valor = 0.275
+
+# pela não normalidade do tempo o teste mais indicado para saber a relação entre as variáveis é o teste de correlação de kendall
+
+#gráfico de dispersão -> acho que não agrega na análise pela diferença dos valores 
+
+ggplot(temp3, aes(x = `Índ AGC`, y = TEMPO_FINAL)) +
+  geom_point(
+    colour = "#A11D21",
+    size = 3,
+    alpha = 0.3
+  ) +
+  labs(
+    x = "Índice AGC",
+    y = "Tempo (Minutos)"
+  ) +
+  theme_estat()
+ggsave("resultados/tilda/disp_AGC_temp_analise3.pdf", width = 158, height = 93, units = "mm")
+
+#teste de kendall
+cor.test(temp3$`Índ AGC`,temp3$TEMPO_FINAL, method = "kendall") #p-valor = 0.7572
+
+#teste de spearman
+cor.test(temp3$`Índ AGC`,temp3$TEMPO_FINAL, method = "spearman") #p-valor = 0.7483
+
+
